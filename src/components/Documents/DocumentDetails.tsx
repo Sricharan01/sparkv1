@@ -18,11 +18,16 @@ import {
   Hash,
   Activity,
   Shield,
-  Zap
+  Zap,
+  Stamp,
+  PenTool,
+  Check,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { databaseService, StoredDocument } from '../../services/databaseService';
 import { securityService } from '../../services/securityService';
+import { DocumentValidationMetadata } from '../../types/documentValidation';
 
 interface DocumentDetailsProps {
   documentId?: string;
@@ -33,9 +38,11 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
   const { user } = useAuth();
   const [document, setDocument] = useState<StoredDocument | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'extracted' | 'processing' | 'metadata' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'extracted' | 'processing' | 'metadata' | 'audit' | 'validation'>('overview');
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const [selectedBoundingBox, setSelectedBoundingBox] = useState<string | null>(null);
+  const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
+  const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
 
   useEffect(() => {
     if (documentId) {
@@ -84,7 +91,8 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
       ocrText: document.ocrRawText,
       processingMetadata: document.processingMetadata,
       extractedImages: document.extractedImages,
-      metadata: document.metadata
+      metadata: document.metadata,
+      validationData: document.metadata?.documentMetadata?.validationMetadata
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -175,6 +183,13 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
     }
   };
 
+  const getValidationMetadata = (): DocumentValidationMetadata | null => {
+    if (!document?.metadata?.documentMetadata?.validationMetadata) {
+      return null;
+    }
+    return document.metadata.documentMetadata.validationMetadata;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -191,6 +206,8 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
       </div>
     );
   }
+
+  const validationMetadata = getValidationMetadata();
 
   return (
     <div className="space-y-6">
@@ -262,11 +279,12 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
+          <nav className="flex space-x-8 px-6 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview', icon: Eye },
               { id: 'extracted', label: 'Extracted Data', icon: Database },
               { id: 'processing', label: 'Processing Details', icon: Cpu },
+              { id: 'validation', label: 'Stamp & Signature', icon: Stamp },
               { id: 'metadata', label: 'Metadata', icon: Hash },
               ...(user?.role === 'admin' ? [{ id: 'audit', label: 'Audit Trail', icon: Shield }] : [])
             ].map((tab) => {
@@ -275,7 +293,7 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -356,56 +374,58 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
                   </div>
                 </div>
 
-                {/* Processing Summary */}
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Processing Summary</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <Cpu className="h-5 w-5 text-blue-600" />
-                        <div>
-                          <p className="text-xs text-blue-600">Processing Method</p>
-                          <p className="text-sm font-medium text-blue-900">
-                            {document.metadata?.processingMethod || 'Standard OCR'}
-                          </p>
+                {/* Validation Summary */}
+                {validationMetadata && (
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Validation Summary</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className={`p-3 rounded-lg ${validationMetadata.stampValidation.status === 'Present' ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <div className="flex items-center space-x-2">
+                          <Stamp className={`h-5 w-5 ${validationMetadata.stampValidation.status === 'Present' ? 'text-green-600' : 'text-red-600'}`} />
+                          <div>
+                            <p className="text-xs text-gray-600">Official Stamps</p>
+                            <p className="text-sm font-medium">
+                              {validationMetadata.stampValidation.status} ({validationMetadata.stampValidation.count})
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <Zap className="h-5 w-5 text-green-600" />
-                        <div>
-                          <p className="text-xs text-green-600">Quality Score</p>
-                          <p className="text-sm font-medium text-green-900">
-                            {Math.round(document.confidence * 100)}%
-                          </p>
+                      <div className={`p-3 rounded-lg ${validationMetadata.stampValidation.matchesMasterList ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <div className="flex items-center space-x-2">
+                          <Check className={`h-5 w-5 ${validationMetadata.stampValidation.matchesMasterList ? 'text-green-600' : 'text-red-600'}`} />
+                          <div>
+                            <p className="text-xs text-gray-600">Master List Match</p>
+                            <p className="text-sm font-medium">
+                              {validationMetadata.stampValidation.matchesMasterList ? 'Y' : 'N'}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <Database className="h-5 w-5 text-purple-600" />
-                        <div>
-                          <p className="text-xs text-purple-600">Fields Extracted</p>
-                          <p className="text-sm font-medium text-purple-900">
-                            {Object.keys(document.fields).length}
-                          </p>
+                      <div className={`p-3 rounded-lg ${validationMetadata.signatureValidation.status === 'Present' ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <div className="flex items-center space-x-2">
+                          <PenTool className={`h-5 w-5 ${validationMetadata.signatureValidation.status === 'Present' ? 'text-green-600' : 'text-red-600'}`} />
+                          <div>
+                            <p className="text-xs text-gray-600">Signatures</p>
+                            <p className="text-sm font-medium">
+                              {validationMetadata.signatureValidation.status} ({validationMetadata.signatureValidation.count})
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="bg-orange-50 p-3 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <Box className="h-5 w-5 text-orange-600" />
-                        <div>
-                          <p className="text-xs text-orange-600">Elements Detected</p>
-                          <p className="text-sm font-medium text-orange-900">
-                            {document.metadata?.boundingBoxes?.length || 0}
-                          </p>
+                      <div className="bg-blue-50 p-3 rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <Activity className="h-5 w-5 text-blue-600" />
+                          <div>
+                            <p className="text-xs text-blue-600">Completeness</p>
+                            <p className="text-sm font-medium text-blue-900">
+                              {validationMetadata.overallValidation.completeness}%
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -455,6 +475,228 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Validation Tab */}
+          {activeTab === 'validation' && validationMetadata && (
+            <div className="space-y-6">
+              {/* Validation Summary */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Validation Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Stamp Validation</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Status:</span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${validationMetadata.stampValidation.status === 'Present' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {validationMetadata.stampValidation.status}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Count:</span>
+                        <span className="text-sm font-medium">{validationMetadata.stampValidation.count}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Master List Match:</span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${validationMetadata.stampValidation.matchesMasterList ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {validationMetadata.stampValidation.matchesMasterList ? 'Y' : 'N'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Validation Time:</span>
+                        <span className="text-sm text-gray-600">
+                          {new Date(validationMetadata.stampValidation.validationTimestamp).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Signature Validation</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Status:</span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${validationMetadata.signatureValidation.status === 'Present' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {validationMetadata.signatureValidation.status}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Count:</span>
+                        <span className="text-sm font-medium">{validationMetadata.signatureValidation.count}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-700">Validation Time:</span>
+                        <span className="text-sm text-gray-600">
+                          {new Date(validationMetadata.signatureValidation.validationTimestamp).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detected Stamps */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Detected Stamps</h3>
+                {validationMetadata.stampValidation.detected.length === 0 ? (
+                  <div className="bg-gray-50 p-6 rounded-lg text-center">
+                    <Stamp className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">No stamps detected in this document</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {validationMetadata.stampValidation.detected.map((stamp, index) => (
+                      <div 
+                        key={stamp.id}
+                        className={`border rounded-lg p-4 cursor-pointer ${
+                          selectedStamp === stamp.id ? 'border-green-500 bg-green-50' : 'border-gray-200'
+                        }`}
+                        onClick={() => setSelectedStamp(selectedStamp === stamp.id ? null : stamp.id)}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <Stamp className="h-5 w-5 text-blue-600" />
+                            <span className="text-sm font-medium">Stamp {index + 1}</span>
+                          </div>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            stamp.matchesMasterList ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            Match: {stamp.matchesMasterList ? 'Y' : 'N'}
+                          </span>
+                        </div>
+                        
+                        {stamp.matchesMasterList && stamp.matchedStampType && (
+                          <p className="text-xs text-green-700 mb-2">
+                            Matched: {stamp.matchedStampType}
+                          </p>
+                        )}
+                        
+                        <div className="flex justify-between text-xs text-gray-600 mb-2">
+                          <span>Type: {stamp.type.replace('_', ' ')}</span>
+                          <span>Confidence: {Math.round(stamp.confidence * 100)}%</span>
+                        </div>
+                        
+                        {selectedStamp === stamp.id && (
+                          <div className="mt-2">
+                            <img 
+                              src={stamp.imageData} 
+                              alt={`Stamp ${index + 1}`}
+                              className="w-full h-auto border rounded-lg"
+                            />
+                            <div className="mt-2 text-xs text-gray-500">
+                              <p>Location: {stamp.location}</p>
+                              <p>Bounding Box: ({stamp.boundingBox.x}, {stamp.boundingBox.y}, {stamp.boundingBox.width}×{stamp.boundingBox.height})</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Detected Signatures */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Detected Signatures</h3>
+                {validationMetadata.signatureValidation.detected.length === 0 ? (
+                  <div className="bg-gray-50 p-6 rounded-lg text-center">
+                    <PenTool className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">No signatures detected in this document</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {validationMetadata.signatureValidation.detected.map((signature, index) => (
+                      <div 
+                        key={signature.id}
+                        className={`border rounded-lg p-4 cursor-pointer ${
+                          selectedSignature === signature.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                        }`}
+                        onClick={() => setSelectedSignature(selectedSignature === signature.id ? null : signature.id)}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <PenTool className="h-5 w-5 text-blue-600" />
+                            <span className="text-sm font-medium">Signature {index + 1}</span>
+                          </div>
+                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                            {signature.type.replace('_', ' ')}
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between text-xs text-gray-600 mb-2">
+                          <span>Location: {signature.location}</span>
+                          <span>Confidence: {Math.round(signature.confidence * 100)}%</span>
+                        </div>
+                        
+                        {selectedSignature === signature.id && (
+                          <div className="mt-2">
+                            <img 
+                              src={signature.imageData} 
+                              alt={`Signature ${index + 1}`}
+                              className="w-full h-auto border rounded-lg"
+                            />
+                            <div className="mt-2 text-xs text-gray-500">
+                              <p>Bounding Box: ({signature.boundingBox.x}, {signature.boundingBox.y}, {signature.boundingBox.width}×{signature.boundingBox.height})</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Overall Validation */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Overall Validation</h3>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-gray-700">Completeness:</span>
+                    <div className="flex items-center">
+                      <div className="w-48 bg-gray-200 rounded-full h-2.5 mr-2">
+                        <div 
+                          className={`h-2.5 rounded-full ${
+                            validationMetadata.overallValidation.completeness >= 70 ? 'bg-green-600' :
+                            validationMetadata.overallValidation.completeness >= 40 ? 'bg-yellow-600' :
+                            'bg-red-600'
+                          }`}
+                          style={{ width: `${validationMetadata.overallValidation.completeness}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm font-medium">
+                        {validationMetadata.overallValidation.completeness}%
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-gray-700">Valid Document:</span>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      validationMetadata.overallValidation.isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {validationMetadata.overallValidation.isValid ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                  
+                  {validationMetadata.overallValidation.missingElements.length > 0 && (
+                    <div className="mb-4">
+                      <span className="text-sm font-medium text-gray-700">Missing Elements:</span>
+                      <ul className="mt-1 list-disc list-inside text-sm text-red-600">
+                        {validationMetadata.overallValidation.missingElements.map((element, index) => (
+                          <li key={index}>{element}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  <div className="text-xs text-gray-500">
+                    <p>Validated by: {validationMetadata.overallValidation.validatedBy}</p>
+                    <p>Validated at: {new Date(validationMetadata.overallValidation.validatedAt).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

@@ -1,7 +1,7 @@
 export interface StampValidation {
   detected: Array<{
     id: string;
-    type: 'official_stamp' | 'seal' | 'emblem';
+    type: 'official_stamp' | 'seal' | 'emblem' | 'unknown';
     boundingBox: {
       x: number;
       y: number;
@@ -11,10 +11,13 @@ export interface StampValidation {
     confidence: number;
     imageData: string;
     location: string;
+    matchesMasterList: boolean;
+    matchedStampType?: string;
   }>;
   status: 'Present' | 'Absent';
   count: number;
   validationTimestamp: string;
+  matchesMasterList: boolean;
 }
 
 export interface SignatureValidation {

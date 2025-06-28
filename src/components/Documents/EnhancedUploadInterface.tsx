@@ -7,8 +7,8 @@ import { openAIService, OpenAIAnalysisResult } from '../../services/openAIServic
 import { temporaryStorageService, TemporaryDocument } from '../../services/temporaryStorageService';
 import { databaseService, StoredDocument } from '../../services/databaseService';
 import { supabaseService } from '../../services/supabaseService';
-import { stampSignatureDetectionService, DocumentValidationResult } from '../../services/stampSignatureDetectionService';
-import { StampSignatureValidator } from './StampSignatureValidator';
+import { officialStampService, DocumentValidationResult } from '../../services/officialStampService';
+import { StampValidator } from './StampValidator';
 import { DocumentValidationMetadata } from '../../types/documentValidation';
 
 export function EnhancedUploadInterface() {
@@ -170,7 +170,7 @@ export function EnhancedUploadInterface() {
 
       // Step 3: Stamp and signature validation
       setProcessingStage('Validating stamps and signatures...');
-      const validationResult = await stampSignatureDetectionService.analyzeDocument(file, user.id);
+      const validationResult = await officialStampService.analyzeDocument(file, user.id);
       setValidationResult(validationResult);
 
       // Step 4: Store in temporary cache
@@ -282,7 +282,8 @@ export function EnhancedUploadInterface() {
           detected: [],
           status: 'Absent',
           count: 0,
-          validationTimestamp: new Date().toISOString()
+          validationTimestamp: new Date().toISOString(),
+          matchesMasterList: false
         },
         signatureValidation: validationResult?.signatures || {
           detected: [],
@@ -674,7 +675,7 @@ export function EnhancedUploadInterface() {
 
       {/* Stamp & Signature Validation */}
       {selectedFile && (
-        <StampSignatureValidator
+        <StampValidator
           documentImage={selectedFile}
           onValidationComplete={handleValidationComplete}
         />
@@ -791,7 +792,7 @@ export function EnhancedUploadInterface() {
             {/* Validation Section */}
             {showValidation && (
               <div className="mb-6">
-                <StampSignatureValidator
+                <StampValidator
                   documentImage={selectedTempDoc.originalFile}
                   onValidationComplete={handleValidationComplete}
                 />
@@ -812,6 +813,7 @@ export function EnhancedUploadInterface() {
                     {validationResult && (
                       <>
                         <div><span className="font-medium">Stamps:</span> {validationResult.stamps.status} ({validationResult.stamps.count})</div>
+                        <div><span className="font-medium">Official Stamp Match:</span> {validationResult.stamps.matchesMasterList ? 'Y' : 'N'}</div>
                         <div><span className="font-medium">Signatures:</span> {validationResult.signatures.status} ({validationResult.signatures.count})</div>
                         <div><span className="font-medium">Validation:</span> {validationResult.overallValidation.completeness}% complete</div>
                       </>
