@@ -4,7 +4,7 @@ import { DocumentProvider } from './contexts/DocumentContext';
 import { LoginForm } from './components/Auth/LoginForm';
 import { Header } from './components/Layout/Header';
 import { Navigation } from './components/Layout/Navigation';
-import { UploadInterface } from './components/Documents/UploadInterface';
+import { EnhancedUploadInterface } from './components/Documents/EnhancedUploadInterface';
 import { RecordsList } from './components/Documents/RecordsList';
 import { DocumentsList } from './components/Documents/DocumentsList';
 import { AnalyticsDashboard } from './components/Analytics/Dashboard';
@@ -24,7 +24,7 @@ function AppContent() {
   const renderCurrentView = () => {
     switch (currentView) {
       case 'upload':
-        return <UploadInterface />;
+        return <EnhancedUploadInterface />;
       case 'records':
         return <RecordsList />;
       case 'documents':
@@ -40,7 +40,7 @@ function AppContent() {
       case 'settings':
         return <TemplateManager />;
       default:
-        return <UploadInterface />;
+        return <EnhancedUploadInterface />;
     }
   };
 
