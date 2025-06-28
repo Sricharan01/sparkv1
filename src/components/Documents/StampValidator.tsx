@@ -9,7 +9,6 @@ import {
   Eye, 
   Download,
   MapPin,
-  Image as ImageIcon,
   Check,
   X
 } from 'lucide-react';
@@ -36,9 +35,9 @@ export function StampValidator({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const officialStamps = officialStampService.getOfficialStampsList();
 
+  // Analyze document when component mounts or when document image changes
   useEffect(() => {
-    // Auto-analyze when component mounts if document image is provided
-    if (documentImage) {
+    if (documentImage && !validationResult && !isAnalyzing) {
       handleAnalyze();
     }
   }, [documentImage]);
@@ -52,8 +51,10 @@ export function StampValidator({
       setValidationResult(result);
       onValidationComplete(result);
       
-      // Draw bounding boxes on canvas
-      await drawBoundingBoxes(result);
+      // Draw bounding boxes on canvas after a short delay to ensure canvas is ready
+      setTimeout(() => {
+        drawBoundingBoxes(result);
+      }, 100);
     } catch (error) {
       console.error('Validation failed:', error);
       alert('Validation failed. Please try again.');
@@ -62,56 +63,93 @@ export function StampValidator({
     }
   };
 
-  const drawBoundingBoxes = async (result: DocumentValidationResult) => {
+  const drawBoundingBoxes = (result: DocumentValidationResult) => {
     if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
     // Load and draw the original image
     const img = new Image();
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
+      // Set canvas size with a maximum dimension to improve performance
+      const maxDimension = 600;
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height && width > maxDimension) {
+        height = (height * maxDimension) / width;
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = (width * maxDimension) / height;
+        height = maxDimension;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      // Draw image with proper scaling
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Calculate scale factors
+      const scaleX = width / img.width;
+      const scaleY = height / img.height;
       
       // Draw stamp bounding boxes
       result.stamps.detected.forEach((stamp, index) => {
         // Use green for official stamps that match master list, yellow for other stamps
         ctx.strokeStyle = stamp.matchesMasterList ? '#10B981' : '#FBBF24';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
+        
+        // Scale the bounding box coordinates
+        const scaledX = stamp.boundingBox.x * scaleX;
+        const scaledY = stamp.boundingBox.y * scaleY;
+        const scaledWidth = stamp.boundingBox.width * scaleX;
+        const scaledHeight = stamp.boundingBox.height * scaleY;
+        
         ctx.strokeRect(
-          stamp.boundingBox.x,
-          stamp.boundingBox.y,
-          stamp.boundingBox.width,
-          stamp.boundingBox.height
+          scaledX,
+          scaledY,
+          scaledWidth,
+          scaledHeight
         );
         
         // Label
         ctx.fillStyle = stamp.matchesMasterList ? '#10B981' : '#FBBF24';
-        ctx.fillRect(stamp.boundingBox.x, stamp.boundingBox.y - 25, 100, 25);
+        ctx.fillRect(scaledX, scaledY - 20, 80, 20);
         ctx.fillStyle = 'white';
-        ctx.font = '12px Arial';
-        ctx.fillText(`Stamp ${index + 1}${stamp.matchesMasterList ? ' ✓' : ''}`, stamp.boundingBox.x + 5, stamp.boundingBox.y - 8);
+        ctx.font = '10px Arial';
+        ctx.fillText(`Stamp ${index + 1}${stamp.matchesMasterList ? ' ✓' : ''}`, scaledX + 5, scaledY - 7);
       });
       
       // Draw signature bounding boxes
       result.signatures.detected.forEach((signature, index) => {
         ctx.strokeStyle = '#3B82F6'; // Blue for signatures
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
+        
+        // Scale the bounding box coordinates
+        const scaledX = signature.boundingBox.x * scaleX;
+        const scaledY = signature.boundingBox.y * scaleY;
+        const scaledWidth = signature.boundingBox.width * scaleX;
+        const scaledHeight = signature.boundingBox.height * scaleY;
+        
         ctx.strokeRect(
-          signature.boundingBox.x,
-          signature.boundingBox.y,
-          signature.boundingBox.width,
-          signature.boundingBox.height
+          scaledX,
+          scaledY,
+          scaledWidth,
+          scaledHeight
         );
         
         // Label
         ctx.fillStyle = '#3B82F6';
-        ctx.fillRect(signature.boundingBox.x, signature.boundingBox.y - 25, 100, 25);
+        ctx.fillRect(scaledX, scaledY - 20, 80, 20);
         ctx.fillStyle = 'white';
-        ctx.font = '12px Arial';
-        ctx.fillText(`Signature ${index + 1}`, signature.boundingBox.x + 5, signature.boundingBox.y - 8);
+        ctx.font = '10px Arial';
+        ctx.fillText(`Signature ${index + 1}`, scaledX + 5, scaledY - 7);
       });
     };
     
@@ -350,12 +388,6 @@ export function StampValidator({
                           <div>
                             Confidence: {Math.round(stamp.confidence * 100)}%
                           </div>
-                          <div>
-                            Size: {stamp.boundingBox.width}×{stamp.boundingBox.height}
-                          </div>
-                          <div>
-                            Position: ({stamp.boundingBox.x}, {stamp.boundingBox.y})
-                          </div>
                         </div>
                       </div>
                       <div className="flex space-x-2">
@@ -423,12 +455,6 @@ export function StampValidator({
                           </div>
                           <div>
                             Confidence: {Math.round(signature.confidence * 100)}%
-                          </div>
-                          <div>
-                            Size: {signature.boundingBox.width}×{signature.boundingBox.height}
-                          </div>
-                          <div>
-                            Position: ({signature.boundingBox.x}, {signature.boundingBox.y})
                           </div>
                         </div>
                       </div>

@@ -48,12 +48,6 @@ export function EnhancedUploadInterface() {
       setAzureServiceHealth(azureHealth);
       setOpenAIServiceHealth(openAIHealth);
       setSupabaseHealth(supabaseHealthCheck);
-      
-      console.log('Service Health Check Results:', {
-        azure: azureHealth,
-        openAI: openAIHealth,
-        supabase: supabaseHealthCheck
-      });
     } catch (error) {
       console.error('Service health check failed:', error);
       setAzureServiceHealth(false);
@@ -67,10 +61,7 @@ export function EnhancedUploadInterface() {
     
     setIsTesting(true);
     try {
-      console.log('Testing Supabase connection and insert...');
-      
       const connectionOk = await supabaseService.checkConnection();
-      console.log('Connection test result:', connectionOk);
       
       if (!connectionOk) {
         alert('Supabase connection failed. Please check your environment variables and database setup.');
@@ -78,7 +69,6 @@ export function EnhancedUploadInterface() {
       }
       
       const insertOk = await supabaseService.testInsert();
-      console.log('Insert test result:', insertOk);
       
       if (insertOk) {
         alert('Supabase connection and insert test successful!');
@@ -102,8 +92,6 @@ export function EnhancedUploadInterface() {
     
     setIsSyncing(true);
     try {
-      console.log('Starting manual sync to Supabase...');
-      
       const syncResult = await databaseService.syncToSupabase();
       
       if (syncResult.success) {
@@ -137,14 +125,11 @@ export function EnhancedUploadInterface() {
     if (file) {
       setSelectedFile(file);
       
-      if (file.type === 'application/pdf') {
-        const url = URL.createObjectURL(file);
-        setPreviewUrl(url);
-      } else {
-        const url = URL.createObjectURL(file);
-        setPreviewUrl(url);
-      }
+      // Create preview URL based on file type
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
       
+      // Process document
       processDocument(file);
     }
   };
@@ -153,7 +138,7 @@ export function EnhancedUploadInterface() {
     if (!user) return;
     
     setIsProcessing(true);
-    setProcessingStage('Initializing Azure AI processing...');
+    setProcessingStage('Initializing processing...');
     
     try {
       // Step 1: Azure AI OCR processing
@@ -168,12 +153,7 @@ export function EnhancedUploadInterface() {
         user.id
       );
 
-      // Step 3: Stamp and signature validation
-      setProcessingStage('Validating stamps and signatures...');
-      const validationResult = await officialStampService.analyzeDocument(file, user.id);
-      setValidationResult(validationResult);
-
-      // Step 4: Store in temporary cache
+      // Step 3: Store in temporary cache
       setProcessingStage('Storing for review...');
       const tempDocId = temporaryStorageService.storeTemporaryDocument(
         file,
@@ -255,11 +235,10 @@ export function EnhancedUploadInterface() {
     setIsSaving(true);
     
     try {
-      console.log('Starting document approval process...');
-      
+      // Approve in temporary storage
       temporaryStorageService.approveDocument(selectedTempDoc.id, user.id);
 
-      console.log('Converting file to base64...');
+      // Convert file to base64
       const fileBase64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -274,7 +253,16 @@ export function EnhancedUploadInterface() {
         reader.readAsDataURL(selectedTempDoc.originalFile);
       });
 
-      console.log('Creating stored document object...');
+      // If we don't have validation results yet, perform validation
+      if (!validationResult) {
+        try {
+          const result = await officialStampService.analyzeDocument(selectedTempDoc.originalFile, user.id);
+          setValidationResult(result);
+        } catch (error) {
+          console.warn('Validation failed during approval:', error);
+          // Continue without validation results
+        }
+      }
       
       // Create validation metadata
       const validationMetadata: DocumentValidationMetadata = {
@@ -359,11 +347,10 @@ export function EnhancedUploadInterface() {
         }
       };
 
-      console.log('Saving document to database...', storedDocument.id);
-      
+      // Save to database
       const documentId = await databaseService.saveDocument(storedDocument);
-      console.log('Document saved successfully with ID:', documentId);
       
+      // Add to context for immediate UI update
       addDocument({
         type: storedDocument.type,
         templateVersion: storedDocument.templateVersion,
@@ -378,10 +365,13 @@ export function EnhancedUploadInterface() {
         metadata: storedDocument.metadata
       });
 
+      // Delete from temporary storage
       temporaryStorageService.deleteTemporaryDocument(selectedTempDoc.id, user.id);
 
+      // Show success message
       alert(`Document approved and saved successfully! Document ID: ${documentId}`);
       
+      // Reset state
       setSelectedTempDoc(null);
       setIsEditing(false);
       setShowFieldMappingDetails(false);
@@ -579,7 +569,7 @@ export function EnhancedUploadInterface() {
           <h2 className="text-xl font-semibold text-gray-900">Enhanced Document Processing</h2>
           <div className="flex items-center space-x-2 text-xs text-blue-600">
             <Zap className="h-4 w-4" />
-            <span>Azure AI + OpenAI + Stamp/Signature Validation + Database Sync</span>
+            <span>Azure AI + OpenAI + Stamp/Signature Validation</span>
           </div>
         </div>
         
@@ -589,11 +579,11 @@ export function EnhancedUploadInterface() {
               <FileImage className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Upload Document</h3>
               <p className="mt-1 text-sm text-gray-500">
-                Select a document for intelligent processing with template mapping, validation, and database sync
+                Select a document for intelligent processing with template mapping and validation
               </p>
               {azureServiceHealth && openAIServiceHealth && (
                 <p className="mt-1 text-xs text-blue-600">
-                  Azure AI OCR + OpenAI analysis + Stamp/Signature validation + Automatic template field mapping + Supabase sync
+                  Azure AI OCR + OpenAI analysis + Stamp/Signature validation + Template field mapping
                 </p>
               )}
               <div className="mt-6 flex justify-center space-x-4">
@@ -1011,7 +1001,7 @@ export function EnhancedUploadInterface() {
               </div>
               <p className="text-sm text-gray-500 mb-4">
                 Scan this QR code with your mobile device to upload documents directly from your phone camera.
-                Documents will be processed with Azure AI and OpenAI with automatic template mapping, stamp/signature validation, and database sync.
+                Documents will be processed with Azure AI and OpenAI with automatic template mapping and stamp/signature validation.
               </p>
               <button
                 onClick={() => setShowQrModal(false)}
