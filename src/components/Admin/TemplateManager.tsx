@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Plus, Edit2, Trash2, Save, X, Copy, Upload, Download, AlertCircle, CheckCircle } from 'lucide-react';
+import { Settings, Plus, Edit2, Trash2, Save, X, Copy, Upload, Download, AlertCircle, CheckCircle, Stamp, PenTool } from 'lucide-react';
 import { useDocuments } from '../../contexts/DocumentContext';
 import { DocumentType, FormField } from '../../types';
 import { databaseService } from '../../services/databaseService';
@@ -18,6 +18,13 @@ export function TemplateManager() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [showValidationSettings, setShowValidationSettings] = useState(false);
+  const [validationSettings, setValidationSettings] = useState({
+    requireStamp: true,
+    requireSignature: true,
+    minStampCount: 1,
+    minSignatureCount: 1
+  });
 
   useEffect(() => {
     loadTemplates();
@@ -63,6 +70,12 @@ export function TemplateManager() {
     setIsEditing(true);
     setSaveStatus('idle');
     setErrorMessage('');
+    setValidationSettings({
+      requireStamp: true,
+      requireSignature: true,
+      minStampCount: 1,
+      minSignatureCount: 1
+    });
   };
 
   const handleEditTemplate = (template: DocumentType) => {
@@ -79,6 +92,17 @@ export function TemplateManager() {
     setIsEditing(true);
     setSaveStatus('idle');
     setErrorMessage('');
+    
+    // Set validation settings based on existing rules
+    const stampRule = template.validationRules.find(rule => rule.field === 'stampValidation');
+    const signatureRule = template.validationRules.find(rule => rule.field === 'signatureValidation');
+    
+    setValidationSettings({
+      requireStamp: Boolean(stampRule),
+      requireSignature: Boolean(signatureRule),
+      minStampCount: stampRule ? parseInt(stampRule.rule.split(':')[1]) || 1 : 1,
+      minSignatureCount: signatureRule ? parseInt(signatureRule.rule.split(':')[1]) || 1 : 1
+    });
   };
 
   const validateTemplate = (template: DocumentType): string | null => {
@@ -122,9 +146,35 @@ export function TemplateManager() {
       setSaveStatus('saving');
       setErrorMessage('');
 
+      // Add validation rules based on settings
+      const validationRules = [...editingTemplate.validationRules.filter(rule => 
+        rule.field !== 'stampValidation' && rule.field !== 'signatureValidation'
+      )];
+      
+      if (validationSettings.requireStamp) {
+        validationRules.push({
+          field: 'stampValidation',
+          rule: `minCount:${validationSettings.minStampCount}`,
+          message: `Document must have at least ${validationSettings.minStampCount} official stamp${validationSettings.minStampCount !== 1 ? 's' : ''}`
+        });
+      }
+      
+      if (validationSettings.requireSignature) {
+        validationRules.push({
+          field: 'signatureValidation',
+          rule: `minCount:${validationSettings.minSignatureCount}`,
+          message: `Document must have at least ${validationSettings.minSignatureCount} signature${validationSettings.minSignatureCount !== 1 ? 's' : ''}`
+        });
+      }
+      
+      const templateToSave = {
+        ...editingTemplate,
+        validationRules
+      };
+
       if (isCreating) {
         // Save new template to database
-        const savedId = await databaseService.saveTemplate(editingTemplate);
+        const savedId = await databaseService.saveTemplate(templateToSave);
         console.log('Template saved with ID:', savedId);
         
         // Log template creation
@@ -132,43 +182,43 @@ export function TemplateManager() {
           user.id,
           'template_created',
           'template',
-          editingTemplate.id,
+          templateToSave.id,
           { 
-            templateName: editingTemplate.name,
-            category: editingTemplate.category,
-            fieldsCount: editingTemplate.template.length
+            templateName: templateToSave.name,
+            category: templateToSave.category,
+            fieldsCount: templateToSave.template.length
           }
         );
 
         // Add to local state
-        setTemplates(prev => [...prev, editingTemplate]);
-        setSelectedTemplate(editingTemplate);
+        setTemplates(prev => [...prev, templateToSave]);
+        setSelectedTemplate(templateToSave);
         
       } else {
         // Update existing template in database
-        const success = await databaseService.updateTemplate(editingTemplate.id, editingTemplate);
+        const success = await databaseService.updateTemplate(templateToSave.id, templateToSave);
         
         if (!success) {
           throw new Error('Failed to update template in database');
         }
         
-        console.log('Template updated:', editingTemplate.id);
+        console.log('Template updated:', templateToSave.id);
         
         // Log template update
         securityService.logAction(
           user.id,
           'template_updated',
           'template',
-          editingTemplate.id,
+          templateToSave.id,
           { 
-            templateName: editingTemplate.name,
-            fieldsCount: editingTemplate.template.length
+            templateName: templateToSave.name,
+            fieldsCount: templateToSave.template.length
           }
         );
 
         // Update local state
-        setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? editingTemplate : t));
-        setSelectedTemplate(editingTemplate);
+        setTemplates(prev => prev.map(t => t.id === templateToSave.id ? templateToSave : t));
+        setSelectedTemplate(templateToSave);
       }
 
       setSaveStatus('success');
@@ -263,6 +313,17 @@ export function TemplateManager() {
     setIsEditing(true);
     setSaveStatus('idle');
     setErrorMessage('');
+    
+    // Set validation settings based on existing rules
+    const stampRule = template.validationRules.find(rule => rule.field === 'stampValidation');
+    const signatureRule = template.validationRules.find(rule => rule.field === 'signatureValidation');
+    
+    setValidationSettings({
+      requireStamp: Boolean(stampRule),
+      requireSignature: Boolean(signatureRule),
+      minStampCount: stampRule ? parseInt(stampRule.rule.split(':')[1]) || 1 : 1,
+      minSignatureCount: signatureRule ? parseInt(signatureRule.rule.split(':')[1]) || 1 : 1
+    });
   };
 
   const handleAddField = () => {
@@ -365,6 +426,17 @@ export function TemplateManager() {
         setSaveStatus('idle');
         setErrorMessage('');
         
+        // Set validation settings based on imported rules
+        const stampRule = newTemplate.validationRules.find(rule => rule.field === 'stampValidation');
+        const signatureRule = newTemplate.validationRules.find(rule => rule.field === 'signatureValidation');
+        
+        setValidationSettings({
+          requireStamp: Boolean(stampRule),
+          requireSignature: Boolean(signatureRule),
+          minStampCount: stampRule ? parseInt(stampRule.rule.split(':')[1]) || 1 : 1,
+          minSignatureCount: signatureRule ? parseInt(signatureRule.rule.split(':')[1]) || 1 : 1
+        });
+        
       } catch (error) {
         alert('Failed to import template. Please check the file format.');
       }
@@ -463,6 +535,25 @@ export function TemplateManager() {
                         ) : (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             Built-in
+                          </span>
+                        )}
+                        
+                        {/* Show validation requirements */}
+                        {template.validationRules.some(rule => rule.field === 'stampValidation') && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            <span className="flex items-center">
+                              <Stamp className="h-3 w-3 mr-1" />
+                              Required
+                            </span>
+                          </span>
+                        )}
+                        
+                        {template.validationRules.some(rule => rule.field === 'signatureValidation') && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            <span className="flex items-center">
+                              <PenTool className="h-3 w-3 mr-1" />
+                              Required
+                            </span>
                           </span>
                         )}
                       </div>
@@ -582,6 +673,101 @@ export function TemplateManager() {
                           <option value="Custom">Custom</option>
                         </select>
                       </div>
+                    </div>
+
+                    {/* Validation Requirements */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-md font-medium text-gray-900 flex items-center">
+                          <Stamp className="h-4 w-4 mr-2 text-purple-600" />
+                          Validation Requirements
+                        </h4>
+                        <button
+                          onClick={() => setShowValidationSettings(!showValidationSettings)}
+                          className="text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          {showValidationSettings ? 'Hide Settings' : 'Show Settings'}
+                        </button>
+                      </div>
+
+                      {showValidationSettings && (
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="requireStamp"
+                                checked={validationSettings.requireStamp}
+                                onChange={(e) => setValidationSettings({
+                                  ...validationSettings,
+                                  requireStamp: e.target.checked
+                                })}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <label htmlFor="requireStamp" className="text-sm font-medium text-gray-700 flex items-center">
+                                <Stamp className="h-4 w-4 mr-1 text-purple-600" />
+                                Require Official Stamp
+                              </label>
+                            </div>
+                            {validationSettings.requireStamp && (
+                              <div className="flex items-center space-x-2">
+                                <label className="text-sm text-gray-700">Min Count:</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="5"
+                                  value={validationSettings.minStampCount}
+                                  onChange={(e) => setValidationSettings({
+                                    ...validationSettings,
+                                    minStampCount: parseInt(e.target.value) || 1
+                                  })}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="requireSignature"
+                                checked={validationSettings.requireSignature}
+                                onChange={(e) => setValidationSettings({
+                                  ...validationSettings,
+                                  requireSignature: e.target.checked
+                                })}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <label htmlFor="requireSignature" className="text-sm font-medium text-gray-700 flex items-center">
+                                <PenTool className="h-4 w-4 mr-1 text-blue-600" />
+                                Require Signature
+                              </label>
+                            </div>
+                            {validationSettings.requireSignature && (
+                              <div className="flex items-center space-x-2">
+                                <label className="text-sm text-gray-700">Min Count:</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="5"
+                                  value={validationSettings.minSignatureCount}
+                                  onChange={(e) => setValidationSettings({
+                                    ...validationSettings,
+                                    minSignatureCount: parseInt(e.target.value) || 1
+                                  })}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="text-xs text-gray-500 italic">
+                            These settings determine the validation requirements for documents using this template.
+                            Documents will be marked as incomplete if they don't meet these requirements.
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -731,6 +917,38 @@ export function TemplateManager() {
                         <span className="font-medium text-gray-700">ID:</span>
                         <span className="ml-2 text-gray-600 font-mono text-xs">{selectedTemplate.id}</span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Validation Requirements */}
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center">
+                      <Stamp className="h-4 w-4 mr-2 text-purple-600" />
+                      Validation Requirements
+                    </h4>
+                    
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      {selectedTemplate.validationRules.some(rule => 
+                        rule.field === 'stampValidation' || rule.field === 'signatureValidation'
+                      ) ? (
+                        <div className="space-y-3">
+                          {selectedTemplate.validationRules
+                            .filter(rule => rule.field === 'stampValidation' || rule.field === 'signatureValidation')
+                            .map((rule, index) => (
+                              <div key={index} className="flex items-center space-x-2">
+                                {rule.field === 'stampValidation' ? (
+                                  <Stamp className="h-4 w-4 text-purple-600" />
+                                ) : (
+                                  <PenTool className="h-4 w-4 text-blue-600" />
+                                )}
+                                <span className="text-sm text-gray-700">{rule.message}</span>
+                              </div>
+                            ))
+                          }
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No validation requirements specified.</p>
+                      )}
                     </div>
                   </div>
 

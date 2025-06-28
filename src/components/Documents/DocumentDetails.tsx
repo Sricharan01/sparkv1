@@ -18,7 +18,9 @@ import {
   Hash,
   Activity,
   Shield,
-  Zap
+  Zap,
+  Stamp,
+  PenTool
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { databaseService, StoredDocument } from '../../services/databaseService';
@@ -33,9 +35,11 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
   const { user } = useAuth();
   const [document, setDocument] = useState<StoredDocument | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'extracted' | 'processing' | 'metadata' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'extracted' | 'processing' | 'metadata' | 'audit' | 'validation'>('overview');
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const [selectedBoundingBox, setSelectedBoundingBox] = useState<string | null>(null);
+  const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
+  const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
 
   useEffect(() => {
     if (documentId) {
@@ -136,6 +140,60 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
     ));
   };
 
+  const renderStampBoundingBoxes = () => {
+    if (!showBoundingBoxes || !document?.metadata?.stampValidation?.detected) return null;
+
+    return document.metadata.stampValidation.detected.map((stamp: any) => (
+      <div
+        key={stamp.id}
+        className={`absolute border-2 cursor-pointer transition-all ${
+          selectedStamp === stamp.id
+            ? 'border-red-500 bg-red-100 bg-opacity-30'
+            : 'border-green-500 bg-green-100 bg-opacity-20'
+        }`}
+        style={{
+          left: `${(stamp.boundingBox.x / 800) * 100}%`,
+          top: `${(stamp.boundingBox.y / 600) * 100}%`,
+          width: `${(stamp.boundingBox.width / 800) * 100}%`,
+          height: `${(stamp.boundingBox.height / 600) * 100}%`,
+        }}
+        onClick={() => setSelectedStamp(selectedStamp === stamp.id ? null : stamp.id)}
+        title={`Stamp: ${stamp.type} (${Math.round(stamp.confidence * 100)}%)`}
+      >
+        <div className="absolute -top-6 left-0 bg-green-600 text-white text-xs px-1 py-0.5 rounded opacity-75">
+          Stamp
+        </div>
+      </div>
+    ));
+  };
+
+  const renderSignatureBoundingBoxes = () => {
+    if (!showBoundingBoxes || !document?.metadata?.signatureValidation?.detected) return null;
+
+    return document.metadata.signatureValidation.detected.map((signature: any) => (
+      <div
+        key={signature.id}
+        className={`absolute border-2 cursor-pointer transition-all ${
+          selectedSignature === signature.id
+            ? 'border-red-500 bg-red-100 bg-opacity-30'
+            : 'border-blue-500 bg-blue-100 bg-opacity-20'
+        }`}
+        style={{
+          left: `${(signature.boundingBox.x / 800) * 100}%`,
+          top: `${(signature.boundingBox.y / 600) * 100}%`,
+          width: `${(signature.boundingBox.width / 800) * 100}%`,
+          height: `${(signature.boundingBox.height / 600) * 100}%`,
+        }}
+        onClick={() => setSelectedSignature(selectedSignature === signature.id ? null : signature.id)}
+        title={`Signature: ${signature.type} (${Math.round(signature.confidence * 100)}%)`}
+      >
+        <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs px-1 py-0.5 rounded opacity-75">
+          Signature
+        </div>
+      </div>
+    ));
+  };
+
   const getBoundingBoxColor = (type: string) => {
     const colors = {
       text: 'border-blue-500 bg-blue-100 bg-opacity-20',
@@ -173,6 +231,18 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getValidationStatusColor = (status: 'Present' | 'Absent') => {
+    return status === 'Present' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+  };
+
+  const getValidationStatusIcon = (status: 'Present' | 'Absent') => {
+    return status === 'Present' ? (
+      <CheckCircle className="h-4 w-4 text-green-600" />
+    ) : (
+      <AlertCircle className="h-4 w-4 text-red-600" />
+    );
   };
 
   if (loading) {
@@ -262,12 +332,13 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
+          <nav className="flex space-x-8 px-6 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview', icon: Eye },
               { id: 'extracted', label: 'Extracted Data', icon: Database },
               { id: 'processing', label: 'Processing Details', icon: Cpu },
               { id: 'metadata', label: 'Metadata', icon: Hash },
+              { id: 'validation', label: 'Validation', icon: Stamp },
               ...(user?.role === 'admin' ? [{ id: 'audit', label: 'Audit Trail', icon: Shield }] : [])
             ].map((tab) => {
               const Icon = tab.icon;
@@ -275,7 +346,7 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -314,6 +385,8 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
                     
                     {/* Render bounding boxes */}
                     {renderBoundingBoxes()}
+                    {renderStampBoundingBoxes()}
+                    {renderSignatureBoundingBoxes()}
                   </div>
                 </div>
                 
@@ -658,6 +731,232 @@ export function DocumentDetails({ documentId, onClose }: DocumentDetailsProps) {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Validation Tab */}
+          {activeTab === 'validation' && (
+            <div className="space-y-6">
+              {/* Stamp Validation */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Stamp className="h-5 w-5 mr-2 text-green-600" />
+                  Stamp Validation
+                </h3>
+                
+                {document.metadata?.stampValidation ? (
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          {getValidationStatusIcon(document.metadata.stampValidation.status)}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getValidationStatusColor(document.metadata.stampValidation.status)}`}>
+                            {document.metadata.stampValidation.status}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {document.metadata.stampValidation.count} stamp{document.metadata.stampValidation.count !== 1 ? 's' : ''} detected
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500">
+                        Validated on: {new Date(document.metadata.stampValidation.validationTimestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    
+                    {document.metadata.stampValidation.detected.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {document.metadata.stampValidation.detected.map((stamp, index) => (
+                          <div
+                            key={stamp.id}
+                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                              selectedStamp === stamp.id ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => setSelectedStamp(selectedStamp === stamp.id ? null : stamp.id)}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Stamp className="h-4 w-4 text-green-600" />
+                                <span className="text-sm font-medium text-gray-900">Stamp {index + 1}</span>
+                              </div>
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                {stamp.type.replace('_', ' ')}
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
+                              <div>
+                                <span className="font-medium">Location:</span> {stamp.location}
+                              </div>
+                              <div>
+                                <span className="font-medium">Confidence:</span> {Math.round(stamp.confidence * 100)}%
+                              </div>
+                              <div>
+                                <span className="font-medium">Size:</span> {stamp.boundingBox.width}×{stamp.boundingBox.height}
+                              </div>
+                              <div>
+                                <span className="font-medium">Position:</span> ({stamp.boundingBox.x}, {stamp.boundingBox.y})
+                              </div>
+                            </div>
+                            
+                            {selectedStamp === stamp.id && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <p className="text-xs text-gray-600 mb-2">Stamp Image:</p>
+                                <img
+                                  src={stamp.imageData}
+                                  alt={`Stamp ${index + 1}`}
+                                  className="max-w-full h-auto border rounded"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center">
+                          <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                          <p className="text-sm text-red-800">No stamps were detected in this document.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">No stamp validation data available for this document.</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Signature Validation */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <PenTool className="h-5 w-5 mr-2 text-blue-600" />
+                  Signature Validation
+                </h3>
+                
+                {document.metadata?.signatureValidation ? (
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          {getValidationStatusIcon(document.metadata.signatureValidation.status)}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getValidationStatusColor(document.metadata.signatureValidation.status)}`}>
+                            {document.metadata.signatureValidation.status}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {document.metadata.signatureValidation.count} signature{document.metadata.signatureValidation.count !== 1 ? 's' : ''} detected
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500">
+                        Validated on: {new Date(document.metadata.signatureValidation.validationTimestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    
+                    {document.metadata.signatureValidation.detected.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {document.metadata.signatureValidation.detected.map((signature, index) => (
+                          <div
+                            key={signature.id}
+                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                              selectedSignature === signature.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => setSelectedSignature(selectedSignature === signature.id ? null : signature.id)}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <PenTool className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm font-medium text-gray-900">Signature {index + 1}</span>
+                              </div>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                {signature.type.replace('_', ' ')}
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
+                              <div>
+                                <span className="font-medium">Location:</span> {signature.location}
+                              </div>
+                              <div>
+                                <span className="font-medium">Confidence:</span> {Math.round(signature.confidence * 100)}%
+                              </div>
+                              <div>
+                                <span className="font-medium">Size:</span> {signature.boundingBox.width}×{signature.boundingBox.height}
+                              </div>
+                              <div>
+                                <span className="font-medium">Position:</span> ({signature.boundingBox.x}, {signature.boundingBox.y})
+                              </div>
+                            </div>
+                            
+                            {selectedSignature === signature.id && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <p className="text-xs text-gray-600 mb-2">Signature Image:</p>
+                                <img
+                                  src={signature.imageData}
+                                  alt={`Signature ${index + 1}`}
+                                  className="max-w-full h-auto border rounded"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center">
+                          <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                          <p className="text-sm text-red-800">No signatures were detected in this document.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">No signature validation data available for this document.</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Validation Summary */}
+              {document.metadata?.validationSummary && (
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Validation Summary</h3>
+                  <div className={`rounded-lg p-4 ${document.metadata.validationSummary.isValid ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+                    <div className="flex items-start space-x-3">
+                      {document.metadata.validationSummary.isValid ? (
+                        <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                      )}
+                      <div>
+                        <h4 className="text-md font-medium text-gray-900">
+                          {document.metadata.validationSummary.isValid ? 'Valid Document' : 'Incomplete Document'}
+                        </h4>
+                        <p className="text-sm text-gray-700 mt-1">
+                          Completeness: {document.metadata.validationSummary.completeness}%
+                        </p>
+                        
+                        {document.metadata.validationSummary.missingElements.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-sm font-medium text-gray-700">Missing Elements:</p>
+                            <ul className="list-disc list-inside text-sm text-gray-600 mt-1">
+                              {document.metadata.validationSummary.missingElements.map((element, index) => (
+                                <li key={index}>{element}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        <p className="text-xs text-gray-500 mt-3">
+                          Validated by {document.metadata.validationSummary.validatedBy} on {new Date(document.metadata.validationSummary.validatedAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
