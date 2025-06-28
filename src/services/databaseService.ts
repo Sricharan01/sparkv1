@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Document, DocumentType, StampValidation, SignatureValidation, ValidationSummary } from '../types';
+import { Document, DocumentType } from '../types';
 import { securityService } from './securityService';
 import { supabaseService } from './supabaseService';
 

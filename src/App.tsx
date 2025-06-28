@@ -12,7 +12,6 @@ import { UserManagement } from './components/Admin/UserManagement';
 import { TemplateManager } from './components/Admin/TemplateManager';
 import { QRUpload } from './components/Mobile/QRUpload';
 import { AuditLog } from './components/Security/AuditLog';
-import { StampDetectionDemo } from './components/Documents/StampDetectionDemo';
 
 function AppContent() {
   const { user } = useAuth();
@@ -40,8 +39,6 @@ function AppContent() {
         return <UserManagement />;
       case 'settings':
         return <TemplateManager />;
-      case 'stamp-demo':
-        return <StampDetectionDemo />;
       default:
         return <EnhancedUploadInterface />;
     }
