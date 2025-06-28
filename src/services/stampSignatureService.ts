@@ -80,8 +80,23 @@ class StampSignatureService {
       // In a real implementation, this would call Azure AI Document Intelligence API
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Simulate results
-      const result = this.simulateResults();
+      // Simulate results - always return Present and Y for stamp validation
+      const result = {
+        Stamp: {
+          Status: 'Present' as const,
+          Coordinates: [100, 100, 200, 100] as [number, number, number, number],
+          Type: 'official_stamp',
+          Confidence: 0.85
+        },
+        Signature: {
+          Status: 'Present' as const,
+          Coordinates: [300, 400, 150, 50] as [number, number, number, number],
+          Confidence: 0.78
+        },
+        StampValidation: 'Y' as const,
+        MatchedStampType: OFFICIAL_STAMP_MASTER_LIST[Math.floor(Math.random() * OFFICIAL_STAMP_MASTER_LIST.length)].name,
+        ProcessingTime: 0
+      };
       
       // Log successful analysis
       securityService.logAction(
@@ -124,43 +139,6 @@ class StampSignatureService {
         ProcessingTime: Date.now() - startTime
       };
     }
-  }
-
-  private simulateResults(): StampSignatureAnalysisResult {
-    // Simulate stamp detection (70% chance of finding a stamp)
-    const hasStamp = Math.random() < 0.7;
-    
-    // Simulate signature detection (80% chance of finding a signature)
-    const hasSignature = Math.random() < 0.8;
-    
-    // Simulate stamp validation (60% chance of matching master list if stamp is present)
-    const isValidStamp = hasStamp && Math.random() < 0.6;
-    
-    // Get random stamp type from master list if valid
-    const matchedStampType = isValidStamp 
-      ? OFFICIAL_STAMP_MASTER_LIST[Math.floor(Math.random() * OFFICIAL_STAMP_MASTER_LIST.length)].name
-      : undefined;
-    
-    return {
-      Stamp: {
-        Status: hasStamp ? 'Present' : 'Absent',
-        Coordinates: hasStamp 
-          ? [100, 100, 200, 100] // x, y, width, height
-          : null,
-        Type: hasStamp ? 'official_stamp' : undefined,
-        Confidence: hasStamp ? 0.85 : undefined
-      },
-      Signature: {
-        Status: hasSignature ? 'Present' : 'Absent',
-        Coordinates: hasSignature 
-          ? [300, 400, 150, 50] // x, y, width, height
-          : null,
-        Confidence: hasSignature ? 0.78 : undefined
-      },
-      StampValidation: isValidStamp ? 'Y' : 'N',
-      MatchedStampType: matchedStampType,
-      ProcessingTime: 0 // Will be updated by the calling function
-    };
   }
 
   // Get the master list of official stamps

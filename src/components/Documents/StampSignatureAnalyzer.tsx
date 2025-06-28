@@ -12,9 +12,7 @@ import {
   Upload,
   Shield,
   Zap,
-  MapPin,
-  Check,
-  X
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -55,12 +53,15 @@ export function StampSignatureAnalyzer() {
   const [error, setError] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isPdf, setIsPdf] = useState(false);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      const fileUrl = URL.createObjectURL(file);
+      setPreviewUrl(fileUrl);
+      setIsPdf(file.type === 'application/pdf');
       setAnalysisResult(null);
       setError('');
     }
@@ -81,8 +82,10 @@ export function StampSignatureAnalyzer() {
       const result: AnalysisResult = simulateAnalysis();
       setAnalysisResult(result);
       
-      // Draw bounding boxes on canvas
-      drawBoundingBoxes(result);
+      // Draw bounding boxes on canvas if not PDF
+      if (!isPdf) {
+        drawBoundingBoxes(result);
+      }
     } catch (error) {
       console.error('Analysis failed:', error);
       setError(error instanceof Error ? error.message : 'Analysis failed');
@@ -92,19 +95,17 @@ export function StampSignatureAnalyzer() {
   };
 
   const simulateAnalysis = (): AnalysisResult => {
-    // Simulate stamp detection (70% chance of finding a stamp)
-    const hasStamp = Math.random() < 0.7;
+    // Always simulate finding a stamp for demo purposes
+    const hasStamp = true;
     
     // Simulate signature detection (80% chance of finding a signature)
     const hasSignature = Math.random() < 0.8;
     
-    // Simulate stamp validation (60% chance of matching master list if stamp is present)
-    const isValidStamp = hasStamp && Math.random() < 0.6;
+    // Always validate stamp as true for demo purposes
+    const isValidStamp = true;
     
-    // Get random stamp type from master list if valid
-    const matchedStampType = isValidStamp 
-      ? OFFICIAL_STAMPS[Math.floor(Math.random() * OFFICIAL_STAMPS.length)]
-      : undefined;
+    // Get random stamp type from master list
+    const matchedStampType = OFFICIAL_STAMPS[Math.floor(Math.random() * OFFICIAL_STAMPS.length)];
     
     return {
       Stamp: {
@@ -206,30 +207,13 @@ export function StampSignatureAnalyzer() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <Shield className="h-6 w-6 text-blue-600" />
+            <Stamp className="h-6 w-6 text-blue-600" />
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Official Stamp & Signature Validation</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Stamp & Signature Analyzer</h2>
               <p className="text-sm text-gray-600">
-                Detect stamps, validate against master list, and check for signatures
+                Upload a document to detect and validate official stamps and signatures
               </p>
             </div>
-          </div>
-          <div className="flex items-center space-x-2 text-xs text-blue-600">
-            <Zap className="h-4 w-4" />
-            <span>AI-Powered Analysis</span>
-          </div>
-        </div>
-
-        {/* Official Stamp Master List */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-blue-900 mb-2">Official Stamp Master List:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-blue-800">
-            {OFFICIAL_STAMPS.map((stamp, index) => (
-              <div key={index} className="flex items-center space-x-1">
-                <span className="inline-block w-4 text-right">{index + 1}.</span>
-                <span>{stamp}</span>
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -305,7 +289,7 @@ export function StampSignatureAnalyzer() {
             {/* Document Preview */}
             <div className="relative border rounded-lg overflow-hidden bg-gray-50">
               <div className="relative w-full h-96">
-                {previewUrl.endsWith('.pdf') ? (
+                {isPdf ? (
                   <iframe
                     src={previewUrl}
                     className="w-full h-full border-0"
@@ -457,51 +441,6 @@ export function StampSignatureAnalyzer() {
           </div>
         </div>
       )}
-
-      {/* Instructions */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">How It Works</h3>
-        <div className="space-y-4">
-          <div className="flex items-start space-x-3">
-            <div className="bg-blue-100 p-2 rounded-full">
-              <Stamp className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-900">Stamp Detection</h4>
-              <p className="text-sm text-gray-600">
-                The system detects physical ink stamps (circular, oval, or rectangular) typically in red, purple, or blue ink.
-                Common locations include top-right, center, or bottom-right of the document.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3">
-            <div className="bg-green-100 p-2 rounded-full">
-              <Shield className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-900">Stamp Validation</h4>
-              <p className="text-sm text-gray-600">
-                Detected stamps are validated against a master list of official stamps to verify authenticity.
-                The system checks for specific text patterns and visual characteristics.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3">
-            <div className="bg-purple-100 p-2 rounded-full">
-              <PenTool className="h-5 w-5 text-purple-600" />
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-gray-900">Signature Detection</h4>
-              <p className="text-sm text-gray-600">
-                The system identifies handwritten signatures in blue or black ink, typically located near the bottom of the document.
-                Printed names (e.g., "Sd/-") are not considered valid signatures.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
